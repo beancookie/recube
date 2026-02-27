@@ -11,6 +11,7 @@
     "deploy": "npm run build && gh-pages -d dist"
   },
   "dependencies": {
+    "@opencvjs/web": "^4.13.0-release.1",
     "@react-three/drei": "^9.88.0",
     "@react-three/fiber": "^8.15.0",
     "cubejs": "^1.2.0",

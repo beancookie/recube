@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(cd:*)",
-      "Bash(cd /d/Code/recube && npx tsc --noEmit 2>&1)"
+      "Bash(cd /d/Code/recube && npx tsc --noEmit 2>&1)",
+      "Bash(head:*)",
+      "Bash(tail:*)"
     ]
   }
 }

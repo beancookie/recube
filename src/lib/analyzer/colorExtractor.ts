@@ -1,51 +1,37 @@
 import { FaceName, FACE_COLORS } from '../../types/cube'
+import { loadOpenCV } from '@opencvjs/web'
 
-// OpenCV.js 类型声明
-declare const cv: {
-  Mat: new (...args: any[]) => any
-  matFromImageData: (imageData: ImageData) => any
-  Rect: new (x: number, y: number, width: number, height: number) => { x: number; y: number; width: number; height: number }
-  mean: (src: any, mask?: any) => [number, number, number, number]
-  onload?: () => void
-}
+// OpenCV 实例 (使用 any 类型简化处理)
+let cv: any = null
 
 // 检查 OpenCV 是否已加载并初始化完成
 function isOpenCVReady(): boolean {
-  if (typeof cv === 'undefined' || !cv) {
-    return false
-  }
-  return typeof cv.Mat === 'function' && cv.Mat != null
+  return cv && typeof cv.Mat === 'function'
 }
 
 // 等待 OpenCV 加载
-function waitForOpenCV(timeout: number = 30000): Promise<boolean> {
-  return new Promise((resolve) => {
-    console.log('OpenCV: Starting wait, cv exists:', typeof cv !== 'undefined')
+async function waitForOpenCV(timeout: number = 30000): Promise<boolean> {
+  // 如果已经加载，直接返回
+  if (isOpenCVReady()) {
+    console.log('OpenCV ready: true (immediate)')
+    return true
+  }
 
-    // 先检查是否已经加载完成
-    if (isOpenCVReady()) {
-      console.log('OpenCV ready: true (immediate)')
-      resolve(true)
-      return
-    }
+  console.log('OpenCV: Loading via loadOpenCV()...')
 
-    console.log('OpenCV waiting to load...')
-
-    // 否则轮询检查
-    const startTime = Date.now()
-    const checkInterval = setInterval(() => {
-      const ready = isOpenCVReady()
-      if (ready) {
-        clearInterval(checkInterval)
-        console.log('OpenCV ready: true (after polling)')
-        resolve(true)
-      } else if (Date.now() - startTime > timeout) {
-        clearInterval(checkInterval)
-        console.log('OpenCV timeout - cv status:', typeof cv, cv ? 'exists' : 'null', cv && cv.Mat)
-        resolve(false)
-      }
-    }, 200)
-  })
+  try {
+    cv = await Promise.race([
+      loadOpenCV(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('OpenCV load timeout')), timeout)
+      )
+    ])
+    console.log('OpenCV ready: true (via loadOpenCV)')
+    return true
+  } catch (error) {
+    console.error('OpenCV load failed:', error)
+    return false
+  }
 }
 
 // 使用 OpenCV 从图像中提取 3x3 网格的颜色
@@ -53,13 +39,15 @@ export async function extractColorsFromImage(
   imageData: string,
   gridSize: number = 3
 ): Promise<FaceName[]> {
+  console.log('[ColorExtractor] 开始提取颜色...')
+
   // 等待 OpenCV 加载
-  const openCVReady = await waitForOpenCV()
-    console.log('OpenCV ready:', openCVReady)
+  const openCVReady = await waitForOpenCV(10000) // 缩短超时时间
+  console.log('[ColorExtractor] OpenCV ready:', openCVReady)
 
   if (!openCVReady) {
     // OpenCV 未加载，回退到简单方法
-    console.warn('OpenCV not loaded, using fallback method')
+    console.warn('[ColorExtractor] OpenCV not loaded, using fallback method')
     return extractColorsFallback(imageData, gridSize)
   }
 
@@ -69,10 +57,13 @@ export async function extractColorsFromImage(
 
     img.onload = () => {
       try {
+        console.log('[ColorExtractor] 图片加载成功, 尺寸:', img.width, 'x', img.height)
+
         // 创建 Canvas 获取图像数据
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')
         if (!ctx) {
+          console.error('[ColorExtractor] 无法获取 canvas context')
           reject(new Error('Failed to get canvas context'))
           return
         }
@@ -84,14 +75,17 @@ export async function extractColorsFromImage(
         canvas.width = size
         canvas.height = size
         ctx.drawImage(img, offsetX, offsetY, size, size, 0, 0, size, size)
+        console.log('[ColorExtractor] 裁剪区域:', size, 'x', size)
 
         // 从 Canvas 创建 OpenCV 图像
         const imageDataObj = ctx.getImageData(0, 0, size, size)
-        const mat = cv.matFromImageData(imageDataObj)
+        const mat = cv!.matFromImageData(imageDataObj)
+        console.log('[ColorExtractor] OpenCV Mat 创建成功')
 
         // 计算每个格子的大小
         const cellSize = size / gridSize
         const colors: FaceName[] = []
+        console.log('[ColorExtractor] 格子大小:', cellSize)
 
         // 对每个格子计算平均颜色
         for (let row = 0; row < gridSize; row++) {
@@ -102,11 +96,11 @@ export async function extractColorsFromImage(
             const w = Math.floor(cellSize * 0.8)
             const h = Math.floor(cellSize * 0.8)
 
-            const rect = new cv.Rect(x, y, w, h)
+            const rect = new cv!.Rect(x, y, w, h)
             const cellRoi = mat.roi(rect)
 
             // 计算平均颜色
-            const meanVal = cv.mean(cellRoi)
+            const meanVal = cv!.mean(cellRoi)
 
             // meanVal 是 [B, G, R] (OpenCV 使用 BGR 格式)
             const b = Math.round(meanVal[0])
@@ -233,6 +227,7 @@ function mapToFaceColor(hex: string): FaceName {
     }
   }
 
+  console.log(`[ColorExtractor] 颜色映射: ${hex} -> ${closestFace} (距离: ${minDistance.toFixed(1)})`)
   return closestFace
 }
 
