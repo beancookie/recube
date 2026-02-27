@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "homepage": "https://yourusername.github.io/recube",
+  "homepage": "https://beancookie.github.io/recube",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

@@ -8,7 +8,7 @@ interface SolveProps {
 }
 
 export function Solve({ onBack }: SolveProps) {
-  const { cubeState, displayState, solution, solveError } = useCubeStore()
+  const { displayState, solution, solveError } = useCubeStore()
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
