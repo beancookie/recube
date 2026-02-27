@@ -102,32 +102,17 @@ export async function extractColorsFromImage(
             // 计算平均颜色
             const meanVal = cv!.mean(cellRoi)
 
-            // meanVal 是 [B, G, R] (OpenCV 使用 BGR 格式)
+            // OpenCV 返回 [B, G, R]
             const b = Math.round(meanVal[0])
             const g = Math.round(meanVal[1])
             const r = Math.round(meanVal[2])
 
-            // 转换为 hex 格式 (RGB)
-            const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('')
+            // 使用颜色规则直接判断，而不是 hex 距离
+            const faceColor = detectColorByRGB(r, g, b)
 
-            console.log('[ColorExtractor] Cell', row, col, '- BGR:', [b, g, r], 'Hex:', hex)
+            console.log('[ColorExtractor] Cell', row, col, '- RGB:', [r, g, b], '->', faceColor)
 
-            // 找到最接近的标准颜色
-            let minDistance = Infinity
-            let closestFace: FaceName = 'U'
-
-            for (const [face, faceHex] of Object.entries(FACE_COLORS)) {
-              const distance = colorDistance(hex, faceHex)
-              console.log('[ColorExtractor]   vs', face, faceHex, '- distance:', distance.toFixed(2))
-              if (distance < minDistance) {
-                minDistance = distance
-                closestFace = face as FaceName
-              }
-            }
-
-            console.log('[ColorExtractor]   Selected:', closestFace, 'minDistance:', minDistance.toFixed(2))
-
-            colors.push(closestFace)
+            colors.push(faceColor)
 
             // 清理
             cellRoi.delete()
@@ -212,6 +197,47 @@ function colorDistance(hex1: string, hex2: string): number {
   const g2 = parseInt(hex2.slice(3, 5), 16)
   const b2 = parseInt(hex2.slice(5, 7), 16)
   return Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2)
+}
+
+// 根据RGB直接判断颜色
+function detectColorByRGB(r: number, g: number, b: number): FaceName {
+  // 白色: R,G,B都很高且接近
+  if (r > 200 && g > 200 && b > 200) {
+    return 'U'
+  }
+  // 黄色: R和G都很高，B较低
+  if (r > 180 && g > 180 && b < 100) {
+    return 'D'
+  }
+  // 橙色: R高，G中等，B低
+  if (r > 180 && g > 50 && g < 200 && b < 100) {
+    return 'L'
+  }
+  // 红色: R很高，G和B较低
+  if (r > 180 && g < 100 && b < 100) {
+    return 'R'
+  }
+  // 蓝色: B很高，R和G较低
+  if (b > 180 && r < 100 && g < 100) {
+    return 'B'
+  }
+  // 绿色: G很高，R和B较低
+  if (g > 150 && r < 100 && b < 100) {
+    return 'F'
+  }
+  // 默认: 使用距离判断
+  const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('')
+  let minDistance = Infinity
+  let closestFace: FaceName = 'U'
+
+  for (const [face, faceHex] of Object.entries(FACE_COLORS)) {
+    const distance = colorDistance(hex, faceHex)
+    if (distance < minDistance) {
+      minDistance = distance
+      closestFace = face as FaceName
+    }
+  }
+  return closestFace
 }
 
 // 将 hex 颜色映射到魔方面
