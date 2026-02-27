@@ -10,6 +10,35 @@ const CENTER_COLORS: Record<FaceName, number[]> = {
   B: [0, 69, 173],      // 蓝
 }
 
+// 改进的颜色检测 - 基于实际照片调整
+function detectByColorRules(r: number, g: number, b: number): FaceName | null {
+  // 蓝色检测 (B): B通道显著高于R通道
+  if (b > r + 30 && b > g + 20) {
+    return 'B'
+  }
+  // 红色检测 (R): R很高，G和B较低 - 放在橙色前面
+  if (r > 180 && g < 100 && b < 100) {
+    return 'R'
+  }
+  // 橙色检测 (L): R高，G中等，B低
+  if (r > 180 && g > 50 && g < 200 && b < 120) {
+    return 'L'
+  }
+  // 黄色检测 (D): R和G都很高，B很低
+  if (r > 180 && g > 180 && b < 80) {
+    return 'D'
+  }
+  // 绿色检测 (F): G很高，R和B较低
+  if (g > 120 && r < 150 && b < 150) {
+    return 'F'
+  }
+  // 白色检测 (U): R、G、B都很高
+  if (r > 200 && g > 200 && b > 200) {
+    return 'U'
+  }
+  return null
+}
+
 // 计算RGB距离
 function colorDistance(rgb1: number[], rgb2: number[]): number {
   return Math.sqrt(
@@ -78,15 +107,25 @@ export async function detectFace(dataUrl: string): Promise<{ face: FaceName; con
   const imgData = await imageDataFromDataUrl(dataUrl)
   const center = getCenterColor(imgData)
 
-  console.log('[FaceDetector] 中心颜色 RGB:', center)
+  const [r, g, b] = center
+  console.log('[FaceDetector] 中心颜色 RGB:', [r, g, b])
 
-  // 直接使用距离检测（更可靠）
+  // 首先使用颜色规则检测
+  const ruleResult = detectByColorRules(r, g, b)
+  if (ruleResult) {
+    console.log('[FaceDetector] ✅ 规则匹配:', ruleResult)
+    return { face: ruleResult, confidence: 0.9 }
+  }
+
+  console.log('[FaceDetector] 规则检测失败，使用距离检测')
+
+  // 如果规则检测失败，使用距离检测
   let minDist = Infinity
   let detected: FaceName = 'U'
 
   for (const [face, expected] of Object.entries(CENTER_COLORS)) {
     const dist = colorDistance(center, expected)
-    console.log(`[FaceDetector] 距离检测 ${face}: ${dist.toFixed(1)} (中心=${center.join(',')}, 期望=${expected.join(',')})`)
+    console.log(`[FaceDetector] 距离检测 ${face}: ${dist.toFixed(1)}`)
     if (dist < minDist) {
       minDist = dist
       detected = face as FaceName

@@ -142,15 +142,22 @@ export function BatchImageUploader({ onConfirm }: BatchImageUploaderProps) {
       setFace(f, null, [])
     })
 
-    // 将检测到的面设置到store中
-    let setCount = 0
+    // 统计当前已分配的面
     const assignedFaces: string[] = []
+
+    // 将检测到的面设置到store中（按顺序检测结果设置）
+    let setCount = 0
     detectedFaces.forEach(face => {
       if (face.detectedFace && face.colors.length === 9) {
-        console.log(`[BatchUploader] 设置面: ${face.detectedFace} <- 图片${face.id}`)
-        setFace(face.detectedFace, face.imageData, face.colors)
-        assignedFaces.push(face.detectedFace)
-        setCount++
+        // 检查这个面是否已经被设置过
+        if (!assignedFaces.includes(face.detectedFace)) {
+          console.log(`[BatchUploader] 设置面: ${face.detectedFace} <- 图片${face.id}`)
+          setFace(face.detectedFace, face.imageData, face.colors)
+          assignedFaces.push(face.detectedFace)
+          setCount++
+        } else {
+          console.warn(`[BatchUploader] 跳过图片${face.id}: 面 ${face.detectedFace} 已存在`)
+        }
       } else {
         console.warn(`[BatchUploader] 跳过图片${face.id}: face=${face.detectedFace}, colors=${face.colors.length}`)
       }
